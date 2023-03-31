@@ -31,7 +31,7 @@ std::string mat2Str(float x[],int length){
 class Ekf2;
 
 
-bool bReadGPS=false, bmagread=false, bReadBaro=false,bReadevq=false,bReadevp=false;//是否读取gps,mag,baro,extel vision attitue and posion
+bool bReadGPS=false, bmagread=false, bReadBaro=false;//是否读取gps,mag,baro
 
 
 namespace ekf2
@@ -60,18 +60,24 @@ void Ekf2::print_status()
 
 void Ekf2::task_main()
 {
-    std::ifstream imuread("../data/test/imu.txt");
-    std::ifstream gpsread("../data/test/gps.txt");
-    std::ifstream magread("../data/test/mag.txt");
-    std::ifstream airread("../data/test/baro.txt");
-    std::ifstream evqread("../data/test/vision_att.txt");
-    std::ifstream evpread("../data/test/vision_pos.txt");
-    std::ofstream vehicle_attitude_out("../data/test/vechile_attitude.txt");
-    std::ofstream vehicle_local_out("../data/test/vechile_local_position.txt");
-    std::ofstream vehicle_global_out("../data/test/vechile_global_position.txt");
+    // std::ifstream imuread("../data/test/imu.txt");
+    // std::ifstream gpsread("../data/test/gps.txt");
+    // std::ifstream magread("../data/test/mag.txt");
+    // std::ifstream airread("../data/test/baro.txt");
+    std::ifstream imuread("../data/test/imu_data.txt");
+    std::ifstream gpsread("../data/test/gps_data.txt");
+    std::ifstream magread("../data/test/mag_data.txt");
+    std::ifstream airread("../data/test/baro_data.txt");
+
+    std::ofstream euler_estimator("../data/test/euler_estimator.txt");
+
     std::ofstream sensor_bias_out("../data/test/sensor_bias.txt");
     std::ofstream estimate_status_out("../data/test/estimate_status.txt");
     std::ofstream ekf_innovations_out("../data/test/ekf_innovations.txt");
+
+    std::ofstream position_estimator("../data/test/position_estimator.txt");
+    std::ofstream velocity_estimator("../data/test/velocity_estimator.txt");
+
 
 	// initialise parameter cache// TODO
 	//updateParams();
@@ -84,27 +90,20 @@ void Ekf2::task_main()
     float gyro_integral_dt = 0;float gyro_rad[3],accelerometer_m_s2[3];
 	float accelerometer_integral_dt = 0;
 	float last_IMUtime = 0;
-    uint64_t now = 0;
+    float now = 0;
     float mag_time_us_read=0, magx, magy, magz;
 
     //baro data
-    uint64_t baro_time_us_read=0;float baro_alt_meter, rho;
+    double baro_time_us_read=0;float baro_alt_meter, rho;
     //gps data
-    uint64_t gps_time_us=0,pos_itow_ms;
-    int32_t lat,lon,alt;
-    int fix_type,nsats;float eph,epv,sacc,vel_m_s,vel_ned[3],cog_rad,tempgps;
+    double gps_time_us=0,pos_itow_ms;
+    double lat,lon,alt;
+    double fix_type,nsats;float eph,epv,sacc,vel_m_s,vel_ned[3],cog_rad,tempgps;
     bool vel_valid;
-    //vision_data
-    uint64_t evq_time_us=0,evp_time_us=0;
-    matrix::Vector3f posNED;
-    matrix::Quatf quat;
-    float posErr,angErr;
-    float ev_eph,ev_epv,ev_evh,ev_evv;
-    int xy_valid,z_valid,v_xy_valid,v_z_valid;
 
 
-    //while (!_task_should_exit && !imuread.eof() && !gpsread.eof() && !magread.eof() && !airread.eof()) {
-    while (!_task_should_exit && !imuread.eof() &&  !imuread.eof() && !airread.eof()&& !evqread.eof()&& !evpread.eof()) {
+
+    while (!_task_should_exit && !imuread.eof() && !gpsread.eof() && !magread.eof() && !airread.eof()) {
 
 		bool isa = true;
 		bool mag_updated = false;
@@ -270,15 +269,30 @@ void Ekf2::task_main()
 		if(bReadGPS)
 		{
 
+            // gpsread >> gps_time_us;	//us
+            // gpsread>>tempgps;//time_utc_usec
+            // gpsread>>lat;gpsread>>lon;gpsread>>alt;
+            // gpsread>>tempgps;//alt_ellipsoid
+            // gpsread>>pos_itow_ms;
+            // gpsread>>tempgps;/*fix_quality*/gpsread>>tempgps;gpsread>>sacc;gpsread>>tempgps;/*c_var_rad*/
+            // gpsread>>eph;gpsread>>epv;gpsread>>tempgps;/*hdop*/gpsread>>tempgps;/*vdop*/gpsread>>tempgps;/*noise_per_ms*/
+            // gpsread>>tempgps;/*jamming_indicator*/gpsread>>vel_m_s;/*vel*/gpsread>>vel_ned[0];gpsread>>vel_ned[1];gpsread>>vel_ned[2];
+            // gpsread>>cog_rad;gpsread>>tempgps;/*timerealtive*/gpsread>>fix_type;gpsread>>vel_valid;gpsread>>nsats;
+
             gpsread >> gps_time_us;	//us
-            gpsread>>tempgps;//time_utc_usec
-            gpsread>>lat;gpsread>>lon;gpsread>>alt;
-            gpsread>>tempgps;//alt_ellipsoid
-            gpsread>>pos_itow_ms;
-            gpsread>>tempgps;/*fix_quality*/gpsread>>tempgps;gpsread>>sacc;gpsread>>tempgps;/*c_var_rad*/
-            gpsread>>eph;gpsread>>epv;gpsread>>tempgps;/*hdop*/gpsread>>tempgps;/*vdop*/gpsread>>tempgps;/*noise_per_ms*/
-            gpsread>>tempgps;/*jamming_indicator*/gpsread>>vel_m_s;/*vel*/gpsread>>vel_ned[0];gpsread>>vel_ned[1];gpsread>>vel_ned[2];
-            gpsread>>cog_rad;gpsread>>tempgps;/*timerealtive*/gpsread>>fix_type;gpsread>>vel_valid;gpsread>>nsats;
+			float temp1; gpsread>>temp1;
+			gpsread >> lat;
+			gpsread >> lon;
+			gpsread >> alt;
+			gpsread>>temp1;
+			gpsread>>sacc;gpsread>>temp1;gpsread>>eph;gpsread>>epv;
+			gpsread>>temp1;gpsread>>temp1;gpsread>>temp1;gpsread>>temp1;
+			gpsread >> vel_m_s;
+			gpsread>>vel_ned[0];gpsread>>vel_ned[1];gpsread>>vel_ned[2];
+			gpsread>>temp1;gpsread>>temp1;
+			gpsread>>fix_type;gpsread>>vel_valid;
+			gpsread>>nsats;
+
             bReadGPS = false;
 
 		}
@@ -306,69 +320,12 @@ void Ekf2::task_main()
             gps_msg.vel_ned[2] = vel_ned[2];
             gps_msg.vel_ned_valid = vel_valid;
             gps_msg.nsats = nsats;
-            ECL_DEBUG("[gps]: time %ld, %d, %d, %d, %d\n",gps_msg.time_usec,gps_msg.lat,gps_msg.lon,gps_msg.alt,gps_msg.fix_type);
+            printf("[gps]: time %ld, %d, %d, %d, %d\n",gps_msg.time_usec,gps_msg.lat,gps_msg.lon,gps_msg.alt,gps_msg.fix_type);
 			//TODO add gdop to gps topic
 			gps_msg.gdop = 0.0f;
 
 			_ekf.setGpsData(gps_msg.time_usec, &gps_msg);
 		}
-
-
-        if(bReadevq)
-        {
-            evqread>>evq_time_us;
-            float evtmq;
-            evqread>>evtmq;evqread>>evtmq;evqread>>evtmq;//roll pitch yaw speed
-            evqread>>quat(0);evqread>>quat(1);evqread>>quat(2);evqread>>quat(3);
-            evqread>>evtmq;evqread>>evtmq;evqread>>evtmq;evqread>>evtmq;evqread>>evtmq;//5个
-
-            bReadevq=false;
-
-        }
-        if(bReadevp)
-        {
-            evpread>>evp_time_us;
-            float evtmp;
-            evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;
-            evpread>>posNED(0);evpread>>posNED(1);evpread>>posNED(2);
-            evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;
-            evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;
-            evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;
-            evpread>>evtmp;evpread>>evtmp;//17
-            evpread>>ev_eph;evpread>>ev_epv;evpread>>ev_evh;evpread>>ev_evv;
-            evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;//4
-            evpread>>xy_valid;evpread>>z_valid;evpread>>v_xy_valid;evpread>>v_z_valid;
-            evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;evpread>>evtmp;
-            evpread>>evtmp;evpread>>evtmp;//7
-
-            bReadevp=false;
-        }
-        if(evp_time_us  < now)
-        {
-            evp_updated = true;
-            bReadevp = true;
-        }
-        if(evq_time_us  < now)
-        {
-            evq_updated = true;
-            bReadevq = true;
-        }
-        if (evq_updated || evp_updated) {
-            ext_vision_message ev_data;
-            ev_data.posNED=posNED;
-            matrix::Quatf q(quat);
-            ev_data.quat = q;
-
-            // position measurement error from parameters. TODO : use covariances from topic
-            ev_data.posErr = fmaxf(_params->ev_pos_noise, fmaxf(ev_eph, ev_epv));
-            ev_data.angErr = _params->ev_ang_noise;
-            // only set data if all positions and velocities are valid
-            if (xy_valid && z_valid && v_xy_valid &&v_z_valid) {
-                // use timestamp from external computer, clocks are synchronized when using MAVROS
-                _ekf.setExtVisionData(evp_updated ? evp_time_us : evq_time_us, &ev_data);
-            }
-            ECL_DEBUG("[EV]now:%ld,ev_time %ld,posNED %f,%f,%f\n",now,evp_updated ? evp_time_us : evq_time_us,posNED(0),posNED(1),posNED(2));
-        }
 
 
 		//run the EKF update and output
@@ -408,10 +365,10 @@ void Ekf2::task_main()
                 //std::stringstream attitude_strs;
 
                 //std::string file;
-                vehicle_attitude_out<<att.timestamp<<space_str<<att.rollspeed<<space_str<<att.pitchspeed<<space_str<<att.yawspeed<<space_str<<att.q[0]<<space_str<<att.q[1]<<space_str<<att.q[2]<<space_str<<att.q[3]<<space_str<<att.delta_q_reset[0]<<space_str<<att.delta_q_reset[1]<<space_str<<att.delta_q_reset[2]<<space_str<<att.delta_q_reset[3]<<space_str<<att.quat_reset_counter<<std::endl;
+                // euler_estimator<<att.timestamp<<space_str<<att.rollspeed<<space_str<<att.pitchspeed<<space_str<<att.yawspeed<<space_str<<att.q[0]<<space_str<<att.q[1]<<space_str<<att.q[2]<<space_str<<att.q[3]<<space_str<<att.delta_q_reset[0]<<space_str<<att.delta_q_reset[1]<<space_str<<att.delta_q_reset[2]<<space_str<<att.delta_q_reset[3]<<space_str<<att.quat_reset_counter<<std::endl;
                 //printf((attitude_strs.str()));
 
-                //vehicle_attitude_out<<attitude_strs.str()<<std::endl;
+                //euler_estimator<<attitude_strs.str()<<std::endl;
 
             }
 
@@ -422,6 +379,13 @@ void Ekf2::task_main()
             // Position of body origin in local NED frame
             float position[3];
             _ekf.get_position(position);
+
+            // Local Position NED
+            //printf("position: %lf,%lf,%lf\n", position[0], position[1], position[2]);
+            position_estimator<< now <<" "<<position[0] <<" "<<position[1] <<" "
+            <<-position[2] <<" "<<std::endl;
+
+
             const float lpos_x_prev = lpos.x;
             const float lpos_y_prev = lpos.y;
             lpos.x = (_ekf.local_position_is_valid()) ? position[0] : 0.0f;
@@ -431,6 +395,11 @@ void Ekf2::task_main()
             // Velocity of body origin in local NED frame (m/s)
             float velocity[3];
             _ekf.get_velocity(velocity);
+
+            velocity_estimator<< now <<" "<<velocity[0] <<" "<<velocity[1] <<" "
+            <<-velocity[2] <<" "<<std::endl;
+
+
             lpos.vx = velocity[0];
             lpos.vy = velocity[1];
             lpos.vz = velocity[2];
@@ -467,6 +436,11 @@ void Ekf2::task_main()
 
             // The rotation of the tangent plane vs. geographical north
             matrix::Eulerf euler(q);
+
+            euler_estimator<< now <<" "<<euler.phi() <<" "<<euler.theta() <<" "
+				<<euler.psi() <<" "<<std::endl;	
+
+
             lpos.yaw = euler.psi();
 
             lpos.dist_bottom_valid = _ekf.get_terrain_valid();
@@ -510,74 +484,13 @@ void Ekf2::task_main()
             if (!PX4_ISFINITE(lpos.hagl_max)) {
                 lpos.hagl_max = INFINITY;
             }
-            //发布vehicle_local_position数据
-            std::stringstream lposStream;//i need a printf function need neednnn
-            vehicle_local_out<<lpos.timestamp<<space_str<<lpos.ref_timestamp<<space_str<<lpos.ref_lat<<space_str
-                     <<lpos.ref_lon<<space_str<<lpos.x<<space_str<<lpos.y<<space_str<<lpos.z<<space_str<<lpos.delta_xy[0]
-                    <<space_str<<lpos.delta_xy[1]<<space_str<<lpos.delta_z<<space_str<<lpos.vx<<space_str<<lpos.vy<<space_str
-                   <<lpos.z_deriv<<space_str<<lpos.delta_vxy[0]<<space_str<<lpos.delta_vxy[2]<<space_str<<lpos.delta_vz<<space_str
-                  <<lpos.yaw<<space_str<<lpos.ref_alt<<space_str<<lpos.dist_bottom<<space_str<<lpos.dist_bottom_rate<<space_str<<lpos.eph<<space_str
-                 <<lpos.epv<<space_str<<lpos.evh<<space_str<<lpos.evv<<space_str<<lpos.vxy_max<<space_str<<lpos.hagl_min<<space_str<<lpos.hagl_max
-                <<lpos.xy_valid<<space_str<<lpos.z_valid<<space_str<<lpos.v_xy_valid<<space_str<<lpos.v_z_valid<<space_str<<lpos.xy_reset_counter<<space_str
-               <<lpos.z_reset_counter<<space_str<<lpos.vxy_reset_counter<<space_str<<lpos.vz_reset_counter<<space_str<<lpos.xy_global<<space_str<<lpos.z_global
-              <<lpos.z_global<<space_str<<lpos.dist_bottom_valid<<space_str<<std::endl;
+  
 
             //vehicle_local_out<<lposStream.str()<<std::endl;
             ECL_INFO("now:%ld,velocity: %f,%f,%f\n", now,velocity[0], velocity[1], velocity[2]);
-            ECL_INFO("position: %lf,%lf,%lf\n", position[0], position[1], position[2]);
+            ECL_INFO("now:%ld,position: %lf,%lf,%lf\n",now, position[0], position[1], position[2]);
 
 
-            if (_ekf.global_position_is_valid() && !_preflt_fail) {
-                // generate and publish global position data
-                vehicle_global_position_s global_pos;
-
-                global_pos.timestamp = now;
-
-                if (fabsf(lpos_x_prev - lpos.x) > FLT_EPSILON || fabsf(lpos_y_prev - lpos.y) > FLT_EPSILON) {
-                    map_projection_reproject(&ekf_origin, lpos.x, lpos.y, &global_pos.lat, &global_pos.lon);
-                }
-
-                global_pos.lat_lon_reset_counter = lpos.xy_reset_counter;
-
-                global_pos.alt = -lpos.z + lpos.ref_alt; // Altitude AMSL in meters
-
-                // global altitude has opposite sign of local down position
-                global_pos.delta_alt = -lpos.delta_z;
-
-                global_pos.vel_n = lpos.vx; // Ground north velocity, m/s
-                global_pos.vel_e = lpos.vy; // Ground east velocity, m/s
-                global_pos.vel_d = lpos.vz; // Ground downside velocity, m/s
-
-                global_pos.yaw = lpos.yaw; // Yaw in radians -PI..+PI.
-
-                _ekf.get_ekf_gpos_accuracy(&global_pos.eph, &global_pos.epv);
-
-                global_pos.dead_reckoning = _ekf.inertial_dead_reckoning();
-
-                global_pos.terrain_alt_valid = lpos.dist_bottom_valid;
-
-                if (global_pos.terrain_alt_valid) {
-                    global_pos.terrain_alt = lpos.ref_alt - terrain_vpos; // Terrain altitude in m, WGS84
-
-                } else {
-                    global_pos.terrain_alt = 0.0f; // Terrain altitude in m, WGS84
-                }
-
-                global_pos.dead_reckoning = _ekf.inertial_dead_reckoning(); // True if this position is estimated through dead-reckoning
-
-                //_vehicle_global_position_pub.update();
-                //发布vehicle_global_position信息
-                //std::stringstream vehicleGlobalPosStream;
-                vehicle_local_out<<global_pos.timestamp<<space_str<<global_pos.lat<<space_str<<global_pos.lon<<space_str<<global_pos.alt
-                                     <<space_str<<global_pos.delta_alt<<space_str<<global_pos.vel_n<<space_str<<global_pos.vel_e<<space_str
-                                    <<global_pos.vel_d<<space_str<<global_pos.yaw<<space_str<<global_pos.eph<<space_str<<global_pos.epv<<space_str
-                                   <<global_pos.terrain_alt<<space_str<<global_pos.lat_lon_reset_counter<<space_str<<global_pos.alt_reset_counter<<space_str
-                                  <<global_pos.terrain_alt_valid<<space_str<<global_pos.dead_reckoning<<std::endl;
-                //vehicle_local_out<<vehicleGlobalPosStream.str()<<std::endl;
-                ECL_INFO("now:%ld time :%ld position: %lf,%lf,%lf\n", now,global_pos.timestamp,global_pos.lat, global_pos.lon, global_pos.alt);
-
-
-            }
 
             {
                 // publish all corrected sensor readings and bias estimates after mag calibration is updated above
@@ -663,16 +576,16 @@ void Ekf2::task_main()
                        <<space_str<<status.beta_test_ratio<<space_str<<status.time_slip<<space_str<<status.gps_check_fail_flags<<space_str<<status.filter_fault_flags
                       <<space_str<<status.innovation_check_flags<<space_str<<status.solution_status_flags<<space_str<<status.nan_flags<<space_str<<status.health_flags
                      <<space_str<<status.timeout_flags<<space_str<<status.pre_flt_fail<<std::endl;
-            std::cout<<"timestamp"<<status.timestamp<<std::endl;
-            std::cout<<status.timestamp<<space_str<<states_str<<space_str<<status.n_states<<status.vibe[0]
-                    <<space_str<<status.vibe[1]<<space_str<<status.vibe[2]<<space_str<<cov_str<<space_str<<status.control_mode_flags<<space_str
-                   <<status.pos_horiz_accuracy<<space_str<<status.pos_vert_accuracy<<space_str<<status.mag_test_ratio<<space_str<<status.vel_test_ratio
-                  <<space_str<<status.pos_test_ratio<<space_str<<status.hgt_test_ratio<<space_str<<status.tas_test_ratio<<space_str<<status.hagl_test_ratio
-                 <<space_str<<status.beta_test_ratio<<space_str<<status.time_slip<<space_str<<status.gps_check_fail_flags<<space_str<<status.filter_fault_flags
-                <<space_str<<status.innovation_check_flags<<space_str<<status.solution_status_flags<<space_str<<status.nan_flags<<space_str<<status.health_flags
-               <<space_str<<status.timeout_flags<<space_str<<status.pre_flt_fail<<std::endl;
-      std::cout<<"mag"<<status.mag_test_ratio<<std::endl;
-      std::cout<<"state[24]:"<<status.states[23]<<"state_var[24]:"<<status.covariances[23]<<std::endl;
+    //         std::cout<<"timestamp"<<status.timestamp<<std::endl;
+    //         std::cout<<status.timestamp<<space_str<<states_str<<space_str<<status.n_states<<status.vibe[0]
+    //                 <<space_str<<status.vibe[1]<<space_str<<status.vibe[2]<<space_str<<cov_str<<space_str<<status.control_mode_flags<<space_str
+    //                <<status.pos_horiz_accuracy<<space_str<<status.pos_vert_accuracy<<space_str<<status.mag_test_ratio<<space_str<<status.vel_test_ratio
+    //               <<space_str<<status.pos_test_ratio<<space_str<<status.hgt_test_ratio<<space_str<<status.tas_test_ratio<<space_str<<status.hagl_test_ratio
+    //              <<space_str<<status.beta_test_ratio<<space_str<<status.time_slip<<space_str<<status.gps_check_fail_flags<<space_str<<status.filter_fault_flags
+    //             <<space_str<<status.innovation_check_flags<<space_str<<status.solution_status_flags<<space_str<<status.nan_flags<<space_str<<status.health_flags
+    //            <<space_str<<status.timeout_flags<<space_str<<status.pre_flt_fail<<std::endl;
+    //   std::cout<<"mag"<<status.mag_test_ratio<<std::endl;
+    //   std::cout<<"state[24]:"<<status.states[23]<<"state_var[24]:"<<status.covariances[23]<<std::endl;
             //ECL_WARN("status.timestamp%d,mag_test_ratio%f，vel_test_ratio%f",status.timestamp,status.mag_test_ratio,status.vel_test_ratio);
             //ECL_WARN("control_mode_flags%d",status.control_mode_flags);
             //estimate_status_out<<ekfStatusStream.str()<<std::endl;
