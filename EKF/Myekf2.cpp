@@ -408,12 +408,7 @@ void Ekf2::task_main()
                 //std::stringstream attitude_strs;
 
                 //std::string file;
-                vehicle_attitude_out<<att.timestamp<<space_str<<att.rollspeed<<space_str
-                            <<att.pitchspeed<<space_str<<att.yawspeed<<space_str
-                            <<att.q[0]<<space_str<<att.q[1]<<space_str<<att.q[2]
-                            <<att.q[3]<<space_str<<att.delta_q_reset[0]<<space_str
-                            <<att.delta_q_reset[1]<<space_str<<att.delta_q_reset[2]
-                            <<space_str<<att.delta_q_reset[3]<<space_str<<att.quat_reset_counter<<std::endl;
+                vehicle_attitude_out<<att.timestamp<<space_str<<att.rollspeed<<space_str<<att.pitchspeed<<space_str<<att.yawspeed<<space_str<<att.q[0]<<space_str<<att.q[1]<<space_str<<att.q[2]<<space_str<<att.q[3]<<space_str<<att.delta_q_reset[0]<<space_str<<att.delta_q_reset[1]<<space_str<<att.delta_q_reset[2]<<space_str<<att.delta_q_reset[3]<<space_str<<att.quat_reset_counter<<std::endl;
                 //printf((attitude_strs.str()));
 
                 //vehicle_attitude_out<<attitude_strs.str()<<std::endl;

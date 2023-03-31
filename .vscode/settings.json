@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.m": "matlab",
+        "*.jinja": "xml",
+        "*.sdf": "xml",
+        "ostream": "cpp"
+    }
+}

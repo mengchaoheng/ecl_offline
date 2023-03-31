@@ -1,13 +1,12 @@
 ## to use ecl_offline
 ### (1) console
 ```
-cd EKF
-mkdir Build/
-cd Build/
-cmake ..
+
+mkdir build/
+cd build/
+cmake ../EKF
 make
-cd ..
-./build/myekf2
+./myekf2
 
 ```
 ### (2) IDE(qtcreator)
