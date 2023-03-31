@@ -77,6 +77,7 @@ void Ekf2::task_main()
 
     std::ofstream position_estimator("../data/test/position_estimator.txt");
     std::ofstream velocity_estimator("../data/test/velocity_estimator.txt");
+    std::ofstream velocity_m("../data/test/velocity_m.txt");
 
 
 	// initialise parameter cache// TODO
@@ -87,19 +88,32 @@ void Ekf2::task_main()
 
 
 
-    float gyro_integral_dt = 0;float gyro_rad[3],accelerometer_m_s2[3];
-	float accelerometer_integral_dt = 0;
-	float last_IMUtime = 0;
-    float now = 0;
-    float mag_time_us_read=0, magx, magy, magz;
+    uint64_t gyro_integral_dt = 0;
+    float gyro_rad[3],accelerometer_m_s2[3];
+	uint64_t accelerometer_integral_dt = 0;
+	uint64_t last_IMUtime = 0;
+    uint64_t now = 0;
+    uint64_t mag_time_us_read=0;
+    float magx, magy, magz;
 
     //baro data
-    double baro_time_us_read=0;float baro_alt_meter, rho;
+    uint64_t baro_time_us_read=0;
+    float baro_alt_meter, baro_temp_celcius, baro_pressure_pa, rho;
     //gps data
-    double gps_time_us=0,pos_itow_ms;
-    double lat,lon,alt;
-    double fix_type,nsats;float eph,epv,sacc,vel_m_s,vel_ned[3],cog_rad,tempgps;
-    bool vel_valid;
+    uint64_t gps_time_us_read=0;
+    uint64_t time_utc_usec=0;
+    int64_t lat=0,lon=0,alt=0;
+    int64_t alt_ellipsoid=0;
+    float s_variance_m_s=0.f, c_variance_rad=0.f, eph=0.f, epv=0.f, hdop=0.f, vdop=0.f;
+    int64_t noise_per_ms=0, jamming_indicator=0;
+    float vel_m_s,vel_n_m_s, vel_e_m_s, vel_d_m_s,cog_rad;
+    int64_t timestamp_time_relative;
+
+    int64_t fix_type=0;
+    bool vel_ned_valid;
+    int64_t satellites_used=0;
+    
+    
 
 
 
@@ -115,36 +129,30 @@ void Ekf2::task_main()
 		bool vehicle_status_updated = false;
 
 		// long gyro_integral_dt = 0.01;
-		// // in replay mode we are getting the actual timestamp from the sensor topic      
         imuread >> now;	//us
-//		float temp;
-//		imuread >> temp;
 
-        ECL_INFO("time now: %ld\n", now);
-        //gyro_integral_dt = now - last_IMUtime;	//us
-        //gyro_integral_dt /= 1.e6f;	//s
-        //accelerometer_integral_dt = now - last_IMUtime;
-        //accelerometer_integral_dt /=1.e6f;
+        // ECL_INFO("time now: %llu\n", now);
 
 		// // push imu data into estimator
         float gyro_integral[3];
         imuread >> gyro_rad[0];	imuread >> gyro_rad[1];	imuread >> gyro_rad[2];imuread>>gyro_integral_dt;
-        gyro_integral_dt /= 1.e6f;	//s
-        ECL_DEBUG("[gyro]:%f,%f,%f,%f s ", gyro_rad[0], gyro_rad[1], gyro_rad[2],gyro_integral_dt);
+        float gyro_dt = gyro_integral_dt / 1.e6f;
+        // gyro_integral_dt /= 1.e6f;	//s
+        // ECL_INFO("[gyro]:now %llu, g1 %f, g2 %f, g3 %f, dt %llu s. \n",now, gyro_rad[0], gyro_rad[1], gyro_rad[2],gyro_integral_dt);
 
-		gyro_integral[0] = gyro_rad[0] * gyro_integral_dt;
-		gyro_integral[1] = gyro_rad[1] * gyro_integral_dt;
-		gyro_integral[2] = gyro_rad[2] * gyro_integral_dt;
-        float accelerometer_timestamp_relative;imuread>>accelerometer_timestamp_relative;
+		gyro_integral[0] = gyro_rad[0] * gyro_dt;
+		gyro_integral[1] = gyro_rad[1] * gyro_dt;
+		gyro_integral[2] = gyro_rad[2] * gyro_dt;
+        int64_t accelerometer_timestamp_relative;imuread>>accelerometer_timestamp_relative;
         float accel_integral[3];
         imuread >> accelerometer_m_s2[0];	imuread >> accelerometer_m_s2[1];	imuread >> accelerometer_m_s2[2];imuread>>accelerometer_integral_dt;
-        accelerometer_integral_dt/=1.e6;  //s
-        ECL_DEBUG("[acceler] accelerometer_m_s2:%f,%f,%f,%f s\n", accelerometer_m_s2[0], accelerometer_m_s2[1], accelerometer_m_s2[2],accelerometer_integral_dt);
-		accel_integral[0] = accelerometer_m_s2[0] * accelerometer_integral_dt;
-		accel_integral[1] = accelerometer_m_s2[1] * accelerometer_integral_dt;
-		accel_integral[2] = accelerometer_m_s2[2] * accelerometer_integral_dt;
-		_ekf.setIMUData(now, gyro_integral_dt * 1.e6f, accelerometer_integral_dt * 1.e6f,
-				gyro_integral, accel_integral);		
+        // accelerometer_integral_dt/=1.e6;  //s
+        float accel_dt = accelerometer_integral_dt / 1.e6f;
+        // ECL_INFO("[acc]:now %llu, a1 %f, a2 %f, a3 %f, dt %llu s. \n",now,  accelerometer_m_s2[0], accelerometer_m_s2[1], accelerometer_m_s2[2],accelerometer_integral_dt);
+		accel_integral[0] = accelerometer_m_s2[0] * accel_dt;
+		accel_integral[1] = accelerometer_m_s2[1] * accel_dt;
+		accel_integral[2] = accelerometer_m_s2[2] * accel_dt;
+		_ekf.setIMUData(now, gyro_integral_dt, accelerometer_integral_dt, gyro_integral, accel_integral);		
 		last_IMUtime = now;
 
         if(bmagread)
@@ -168,10 +176,10 @@ void Ekf2::task_main()
 		{
             //_timestamp_mag_us = mag_time_ms_read * 1.e3f;
             //_timestamp_mag_us = mag_time_ms_read;
-            _timestamp_mag_us = mag_time_us_read;
+            // _timestamp_mag_us = mag_time_us_read;
 			// If the time last used by the EKF is less than specified, then accumulate the
 			// data and push the average when the 50msec is reached.
-			_mag_time_sum_ms += _timestamp_mag_us / 1000.0f;
+			_mag_time_sum_ms += mag_time_us_read / 1000.0f;
 			_mag_sample_count++;
 			_mag_data_sum[0] += magx;
 			_mag_data_sum[1] += magy;
@@ -180,10 +188,11 @@ void Ekf2::task_main()
 			
 			if (mag_time_ms - _mag_time_ms_last_used > _params->sensor_interval_min_ms) {
 				float mag_sample_count_inv = 1.0f / (float)_mag_sample_count;
+                // calculate mean of measurements and correct for learned bias offsets
 				float mag_data_avg_ga[3] = {_mag_data_sum[0] *mag_sample_count_inv, _mag_data_sum[1] *mag_sample_count_inv, _mag_data_sum[2] *mag_sample_count_inv};
+
 				_ekf.setMagData(1000 * (uint64_t)mag_time_ms, mag_data_avg_ga);
-                printf("[mag]: %d %d %f %f %f %f\n",now,mag_time_us_read,mag_time_ms,
-                        _mag_data_sum[0],_mag_data_sum[1],_mag_data_sum[2]);
+                // ECL_INFO("[mag]: now %llu time %llu time_agv %u m1 %f m2 %f m3 %f\n",now,mag_time_us_read,mag_time_ms, _mag_data_sum[0],_mag_data_sum[1],_mag_data_sum[2]);
 				_mag_time_ms_last_used = mag_time_ms;
 				_mag_time_sum_ms = 0;
 				_mag_sample_count = 0;
@@ -199,9 +208,9 @@ void Ekf2::task_main()
             airread >> baro_time_us_read;	//us
 
             airread>>baro_alt_meter;
-            float temp; airread>>temp;airread>>temp;//baro_temp_celcius,baro_pressure_pa
+            airread>>baro_temp_celcius;airread>>baro_pressure_pa;//baro_temp_celcius,baro_pressure_pa
 
-            airread >>rho  ;
+            airread >>rho;
 			// if(baroHeight_origin == 0)
 			// 	baroHeight_origin = baroHeight;
 			// baroHeight -= baroHeight_origin;
@@ -215,19 +224,18 @@ void Ekf2::task_main()
 		}
 		if(baro_updated)
 		{
-                _timestamp_balt_us = baro_time_us_read;
+                // _timestamp_balt_us = baro_time_us_read;
 
 				// If the time last used by the EKF is less than specified, then accumulate the
 				// data and push the average when the 50msec is reached.
-				_balt_time_sum_ms += _timestamp_balt_us / 1000;
+				_balt_time_sum_ms += baro_time_us_read / 1000;
 				_balt_sample_count++;
                 _balt_data_sum += baro_alt_meter;
 				uint32_t balt_time_ms = _balt_time_sum_ms / _balt_sample_count;
 
 				if (balt_time_ms - _balt_time_ms_last_used > (uint32_t)_params->sensor_interval_min_ms) {
 					float balt_data_avg = _balt_data_sum / (float)_balt_sample_count;
-                ECL_DEBUG("[baro]: %f %f %d %f\n",now,baro_time_us_read,balt_time_ms,
-                        balt_data_avg);
+                // ECL_INFO("[baro]: now %llu time %llu time_vag %u balt_data_avg %f\n",now,baro_time_us_read,balt_time_ms, balt_data_avg);
                 _ekf.set_air_density(rho);
 
 
@@ -269,34 +277,46 @@ void Ekf2::task_main()
 		if(bReadGPS)
 		{
 
-            // gpsread >> gps_time_us;	//us
+            // gpsread >> gps_time_us_read;	//us
             // gpsread>>tempgps;//time_utc_usec
             // gpsread>>lat;gpsread>>lon;gpsread>>alt;
             // gpsread>>tempgps;//alt_ellipsoid
             // gpsread>>pos_itow_ms;
             // gpsread>>tempgps;/*fix_quality*/gpsread>>tempgps;gpsread>>sacc;gpsread>>tempgps;/*c_var_rad*/
             // gpsread>>eph;gpsread>>epv;gpsread>>tempgps;/*hdop*/gpsread>>tempgps;/*vdop*/gpsread>>tempgps;/*noise_per_ms*/
-            // gpsread>>tempgps;/*jamming_indicator*/gpsread>>vel_m_s;/*vel*/gpsread>>vel_ned[0];gpsread>>vel_ned[1];gpsread>>vel_ned[2];
+            // gpsread>>tempgps;/*jamming_indicator*/gpsread>>vel_m_s;/*vel*/gpsread>>vel_n_m_s;gpsread>>vel_e_m_s;gpsread>>vel_d_m_s;
             // gpsread>>cog_rad;gpsread>>tempgps;/*timerealtive*/gpsread>>fix_type;gpsread>>vel_valid;gpsread>>nsats;
 
-            gpsread >> gps_time_us;	//us
-			float temp1; gpsread>>temp1;
+            // float temp; gpsread >> temp;
+            gpsread >> gps_time_us_read;	//us
+            gpsread >>time_utc_usec;
 			gpsread >> lat;
 			gpsread >> lon;
 			gpsread >> alt;
-			gpsread>>temp1;
-			gpsread>>sacc;gpsread>>temp1;gpsread>>eph;gpsread>>epv;
-			gpsread>>temp1;gpsread>>temp1;gpsread>>temp1;gpsread>>temp1;
+			gpsread>>alt_ellipsoid;
+			gpsread>>s_variance_m_s;
+            gpsread>>c_variance_rad;
+            gpsread>>eph;
+            gpsread>>epv;
+			gpsread>>hdop;
+            gpsread>>vdop;
+            gpsread>>noise_per_ms;
+            gpsread>>jamming_indicator;
 			gpsread >> vel_m_s;
-			gpsread>>vel_ned[0];gpsread>>vel_ned[1];gpsread>>vel_ned[2];
-			gpsread>>temp1;gpsread>>temp1;
-			gpsread>>fix_type;gpsread>>vel_valid;
-			gpsread>>nsats;
-
+			gpsread>>vel_n_m_s;
+            gpsread>>vel_e_m_s;
+            gpsread>>vel_d_m_s;
+			gpsread>>cog_rad;
+            gpsread>>timestamp_time_relative;
+			gpsread>>fix_type;
+            gpsread>>vel_ned_valid;
+			gpsread>>satellites_used;
+            ECL_INFO("[gps]: gps_time_us_read %llu, time_utc_usec %llu, lat %lld, lon %lld, alt %lld, alt_ellipsoid %lld, s_variance_m_s %f, c_variance_rad %f, eph %f, epv %f, hdop %f, vdop %f, noise_per_ms %lld, jamming_indicator %lld, vel_m_s %f, v1 %f, v2 %f, v3 %f, cog_rad %f, timestamp_time_relative %lld, fix_type %lld, vel_ned_valid %d, satellites_used %lld\n", gps_time_us_read, time_utc_usec, lat, lon, alt, alt_ellipsoid, s_variance_m_s, c_variance_rad, eph, epv, hdop, vdop, noise_per_ms, jamming_indicator, vel_m_s, vel_n_m_s, vel_e_m_s, vel_d_m_s, cog_rad, timestamp_time_relative, fix_type, vel_ned_valid, satellites_used);
+            // ECL_INFO("[gps]: now %llu time %llu\n", now, gps_time_us_read);
             bReadGPS = false;
 
 		}
-        if(gps_time_us  < now)
+        if(gps_time_us_read  < now)
 		{
 			gps_updated = true;
 			bReadGPS = true;
@@ -304,7 +324,7 @@ void Ekf2::task_main()
 		if(gps_updated)
 		{
 			struct gps_message gps_msg = {};
-            gps_msg.time_usec = gps_time_us;
+            gps_msg.time_usec = gps_time_us_read;
             gps_msg.lat = lat;
             gps_msg.lon = lon;
             gps_msg.alt = alt;
@@ -313,14 +333,18 @@ void Ekf2::task_main()
             gps_msg.fix_type = fix_type;
             gps_msg.eph = eph;
             gps_msg.epv = epv;
-            gps_msg.sacc = sacc;
+            gps_msg.sacc = s_variance_m_s;
             gps_msg.vel_m_s = vel_m_s;
-            gps_msg.vel_ned[0] = vel_ned[0];
-            gps_msg.vel_ned[1] = vel_ned[1];
-            gps_msg.vel_ned[2] = vel_ned[2];
-            gps_msg.vel_ned_valid = vel_valid;
-            gps_msg.nsats = nsats;
-            printf("[gps]: time %ld, %d, %d, %d, %d\n",gps_msg.time_usec,gps_msg.lat,gps_msg.lon,gps_msg.alt,gps_msg.fix_type);
+            gps_msg.vel_ned[0] = vel_n_m_s;
+            gps_msg.vel_ned[1] = vel_e_m_s;
+            gps_msg.vel_ned[2] = vel_d_m_s;
+            gps_msg.vel_ned_valid = vel_ned_valid;
+            gps_msg.nsats = satellites_used;
+            // ECL_INFO("gps_time_us_read:%lf,velocity: %f,%f,%f\n", gps_time_us_read,vel_n_m_s,vel_e_m_s,vel_d_m_s);
+// ECL_INFO("[gps]: now %d time %d v1 %f v2 %f v3 %f\n",now,gps_time_us_read,vel_n_m_s,vel_e_m_s,vel_d_m_s);
+            // printf("[gps]: time %llu, %d, %d, %d, %d\n",gps_msg.time_usec,gps_msg.lat,gps_msg.lon,gps_msg.alt,gps_msg.fix_type);
+            // printf("[gps]: time %lf, %f, %f, %f, %f\n",gps_msg.time_usec,gps_msg.vel_n_m_s,gps_msg.vel_e_m_s,gps_msg.vel_d_m_s,gps_msg.vel_m_s);
+            // ECL_INFO("now:%llu,velocity: %f,%f,%f\n", gps_msg.time_usec,gps_msg.vel_ned[0],gps_msg.vel_ned[1],gps_msg.vel_ned[2]);
 			//TODO add gdop to gps topic
 			gps_msg.gdop = 0.0f;
 
@@ -331,6 +355,7 @@ void Ekf2::task_main()
 		//run the EKF update and output
 		if (_ekf.update()) {
 
+// ECL_INFO("time now: %llu\n", now);
             // integrate time to monitor time slippage
             if (_start_time_us == 0) {
                 _start_time_us = now;
@@ -398,6 +423,8 @@ void Ekf2::task_main()
 
             velocity_estimator<< now <<" "<<velocity[0] <<" "<<velocity[1] <<" "
             <<-velocity[2] <<" "<<std::endl;
+            velocity_m<< now <<" "<<vel_n_m_s <<" "<<vel_e_m_s <<" "
+            <<-vel_d_m_s <<" "<<std::endl;
 
 
             lpos.vx = velocity[0];
@@ -487,8 +514,8 @@ void Ekf2::task_main()
   
 
             //vehicle_local_out<<lposStream.str()<<std::endl;
-            ECL_INFO("now:%ld,velocity: %f,%f,%f\n", now,velocity[0], velocity[1], velocity[2]);
-            ECL_INFO("now:%ld,position: %lf,%lf,%lf\n",now, position[0], position[1], position[2]);
+            // ECL_INFO("now:%ld,velocity: %f,%f,%f\n", now,velocity[0], velocity[1], velocity[2]);
+            // ECL_INFO("now:%ld,position: %lf,%lf,%lf\n",now, position[0], position[1], position[2]);
 
 
 
@@ -530,7 +557,7 @@ void Ekf2::task_main()
                               <<space_str<<bias.accel_y_bias<<space_str<<bias.accel_z_bias<<space_str<<bias.mag_x_bias<<space_str<<bias.mag_y_bias
                              <<space_str<<bias.mag_z_bias<<std::endl;
                 //sensor_bias_out<<sensorBiasStream.str()<<std::endl;
-                ECL_INFO("[sensor_bias]now:%ld,time:%ld,gyro:%f %f %f",now,bias.timestamp,bias.accel_x_bias,bias.accel_y,bias.accel_z);
+                // ECL_INFO("[sensor_bias]now:%ld,time:%ld,gyro:%f %f %f",now,bias.timestamp,bias.accel_x_bias,bias.accel_y,bias.accel_z);
 
 
             }
@@ -554,9 +581,9 @@ void Ekf2::task_main()
             _ekf.get_ekf_soln_status(&status.solution_status_flags);
             _ekf.get_imu_vibe_metrics(status.vibe);
             status.time_slip = _last_time_slip_us / 1e6f;
-            status.nan_flags = 0.0f; // unused
-            status.health_flags = 0.0f; // unused
-            status.timeout_flags = 0.0f; // unused
+            status.nan_flags = 0; // unused
+            status.health_flags = 0; // unused
+            status.timeout_flags = 0; // unused
             status.pre_flt_fail = _preflt_fail;
 
 //            if (_estimator_status_pub == nullptr) {
@@ -632,7 +659,7 @@ void Ekf2::task_main()
                                 <<space_str<<innovations.hagl_innov_var<<space_str<<output_tra_ero_str<<space_str
                                <<innovations.drag_innov[0]<<space_str<<innovations.drag_innov[1]<<space_str<<innovations.drag_innov_var[0]<<space_str<<innovations.drag_innov_var[1]
                               <<space_str<<innovations.aux_vel_innov[0]<<space_str<<innovations.aux_vel_innov[1]<<std::endl;
-                std::cout<<"track_erro"<<output_tra_ero_str<<std::endl;
+                // std::cout<<"track_erro"<<output_tra_ero_str<<std::endl;
                 //ekf_innovations_out<<ekf_innovations_stream.str()<<std::endl;
 
 
@@ -654,7 +681,7 @@ void Ekf2::task_main()
             }
 
         }
-    ECL_INFO("end\n");
+    // ECL_INFO("end\n");
 
 
     }

@@ -72,12 +72,12 @@ vision_att_file=file_head+"_vehicle_vision_attitude_0.csv"
 
 #outfile_head=''
 outfile_head=outputfile
-out_imu=outfile_head+'imu.txt'
-out_gps=outfile_head+'gps.txt'
-out_mag=outfile_head+'mag.txt'
+out_imu=outfile_head+'imu_data.txt'
+out_gps=outfile_head+'gps_data.txt'
+out_mag=outfile_head+'mag_data.txt'
 out_vision_pos=outfile_head+'vision_pos.txt'
 out_vision_att=outfile_head+"vision_att.txt"
-out_air=outfile_head+"baro.txt"
+out_air=outfile_head+"baro_data.txt"
 #handle imu
 lines=[]
 if(os.path.exists(imu_file)):

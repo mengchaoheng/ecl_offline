@@ -80,9 +80,9 @@ private:
     bool _valid_cal_available[3] = {};	///< true when an unsaved valid calibration for the XYZ magnetometer bias is available
     float _last_valid_variance[3] = {};	///< variances for the last valid magnetometer XYZ bias estimates (mGauss**2)
 
-	// Initialise time stamps used to send sensor data to the EKF and for logging
-	uint64_t _timestamp_mag_us = 0;
-	uint64_t _timestamp_balt_us = 0;
+	// // Initialise time stamps used to send sensor data to the EKF and for logging
+	// uint64_t _timestamp_mag_us = 0;
+	// uint64_t _timestamp_balt_us = 0;
 
     // time slip monitoring by sjj
     uint64_t _integrated_time_us = 0;	///< integral of gyro delta time from start (uSec)
@@ -94,7 +94,7 @@ private:
 	float _mag_data_sum[3] = {0};			// summed magnetometer readings (Ga)
 	uint64_t _mag_time_sum_ms = 0;		// summed magnetoemter time stamps (msec)
 	// uint64_t _mag_time_sum_ms;		// summed magnetoemter time stamps (msec)
-    int _mag_sample_count = 0;		// number of magnetometer measurements summed
+    uint8_t _mag_sample_count = 0;		// number of magnetometer measurements summed
 	uint32_t _mag_time_ms_last_used = 0;	// time stamp in msec of the last averaged magnetometer measurement used by the EKF
 
 	// Used to down sample barometer data
