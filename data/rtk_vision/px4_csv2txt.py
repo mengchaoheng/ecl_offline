@@ -23,11 +23,11 @@ def mkdir(path):
         # 如果不存在则创建目录
         # 创建目录操作函数
         os.makedirs(path)  
-        print path+' 创建成功'
+        # print path+' 创建成功'
         return True
     else:
         # 如果目录存在则不创建，并提示目录已存在
-        print path+' 目录已存在'
+        # print path+' 目录已存在'
         return False
         
         
@@ -44,18 +44,18 @@ outputfile = ''
 try:
     opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])
 except getopt.GetoptError:
-    print 'csv2txt_file.py -i <inputfilehead> -o <outputfilehead>'
+    # print 'csv2txt_file.py -i <inputfilehead> -o <outputfilehead>'
     sys.exit(2)
 for opt, arg in opts:
     if opt == '-h':
-        print 'csv2txt_file.py -i <inputfilehead> -o <outputfilehead>'
+        # print 'csv2txt_file.py -i <inputfilehead> -o <outputfilehead>'
         sys.exit()
     elif opt in ("-i", "--ifile"):
         inputfile = arg
     elif opt in ("-o", "--ofile"):
         outputfile = arg
-print '输入的文件夹+文件名前缀为：', inputfile
-print '输出的文件夹为：', outputfile
+# print '输入的文件夹+文件名前缀为：', inputfile
+# print '输出的文件夹为：', outputfile
 
 mkdir(outputfile)
 #处理ulog2csv生成的文件作为ecl_offline的输入
