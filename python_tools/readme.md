@@ -4,8 +4,9 @@
 主要是将px4日志*.ulg转换为csv文件，通过该脚本可转换为ecl_offline可用的txt输入文件。
 使用方法，以转换123.ulg文件,输出文件到当前目录的test文件夹下为例
 ```
+cd python_tools
 ulog2csv 123.ulg
-python px4_csv2txt.py -i 123 -o  ./test/
+python px4_csv2txt.py -i 123 -o  ../data/test/
 ```
 需要注意的是 -i 后面跟的是ulog文件的前缀，不但后缀名。
 转换成功即可在test文件夹下见到转换成功的文件

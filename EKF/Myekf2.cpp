@@ -69,15 +69,15 @@ void Ekf2::task_main()
     std::ifstream magread("../data/test/mag_data.txt");
     std::ifstream airread("../data/test/baro_data.txt");
 
-    std::ofstream euler_estimator("../data/test/euler_estimator.txt");
+    std::ofstream euler_estimator("../results/euler_estimator.txt");
 
-    std::ofstream sensor_bias_out("../data/test/sensor_bias.txt");
-    std::ofstream estimate_status_out("../data/test/estimate_status.txt");
-    std::ofstream ekf_innovations_out("../data/test/ekf_innovations.txt");
+    std::ofstream sensor_bias_out("../results/sensor_bias.txt");
+    std::ofstream estimate_status_out("../results/estimate_status.txt");
+    std::ofstream ekf_innovations_out("../results/ekf_innovations.txt");
 
-    std::ofstream position_estimator("../data/test/position_estimator.txt");
-    std::ofstream velocity_estimator("../data/test/velocity_estimator.txt");
-    std::ofstream velocity_m("../data/test/velocity_m.txt");
+    std::ofstream position_estimator("../results/position_estimator.txt");
+    std::ofstream velocity_estimator("../results/velocity_estimator.txt");
+    std::ofstream velocity_m("../results/velocity_m.txt");
 
 
 	// initialise parameter cache// TODO
@@ -138,7 +138,7 @@ void Ekf2::task_main()
         imuread >> gyro_rad[0];	imuread >> gyro_rad[1];	imuread >> gyro_rad[2];imuread>>gyro_integral_dt;
         float gyro_dt = gyro_integral_dt / 1.e6f;
         // gyro_integral_dt /= 1.e6f;	//s
-        // ECL_INFO("[gyro]:now %llu, g1 %f, g2 %f, g3 %f, dt %llu s. \n",now, gyro_rad[0], gyro_rad[1], gyro_rad[2],gyro_integral_dt);
+        ECL_INFO("[gyro]:now %llu, g1 %f, g2 %f, g3 %f, dt %llu s. \n",now, gyro_rad[0], gyro_rad[1], gyro_rad[2],gyro_integral_dt);
 
 		gyro_integral[0] = gyro_rad[0] * gyro_dt;
 		gyro_integral[1] = gyro_rad[1] * gyro_dt;
